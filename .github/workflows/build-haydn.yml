@@ -47,9 +47,14 @@ jobs:
 
       - name: Download LineageOS prebuilt clang toolchain (lineage-23.2, clang-r487747c)
         run: |
+          # NOTE: do NOT use `git clone` here. actions/checkout unsets
+          # http.extraheader on the runner, so a plain HTTPS clone prompts for
+          # a username and hangs the job. Fetch the tarball instead.
           mkdir -p toolchains/clang
           cd toolchains/clang
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r487747c.git .
+          curl -fsSL --max-time 300 \
+            "https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r487747c/archive/refs/heads/main.tar.gz" \
+            | tar -xz --strip-components=1
           echo "CLANG_DIR=$GITHUB_WORKSPACE/toolchains/clang" >> $GITHUB_ENV
           ls bin/clang*
 
