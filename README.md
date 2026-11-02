@@ -19,7 +19,7 @@ Droidspaces 检查在 stock LineageOS 内核中缺少两项 **MUST HAVE** 功能
 2. **GKI bootloop**：haydn 内核是 **5.4 GKI**，直接在 defconfig 开启 `CONFIG_PID_NS` / `CONFIG_IPC_NS` / `CONFIG_SYSVIPC` **会导致 vendor 模块 ABI 不匹配，引发 bootloop**。本项目已在编译前自动打 kABI 补丁，请务必保留 `patches/gki/` 中的补丁文件。
 3. **Root 要求**：Droidspaces 必须有 root。刷入内核后，请确保你的系统已 root（Magisk / KernelSU / APatch / LineageOS `WITH_SU=true`），并授予 Droidspaces root 权限。
 4. **A/B 分区设备**：haydn 是 A/B 分区设备，测试建议先用 `fastboot boot boot.img` 临时启动验证，确认无误后再 `fastboot flash boot` 正式刷入。
-5. **dtbo 是独立分区**：haydn 使用 `BOARD_KERNEL_SEPARATED_DTBO=true`，dtbo.img 不应嵌入 boot.img，需单独刷入或保持原样。
+5. **dtbo 保持原样**：haydn 使用 `BOARD_KERNEL_SEPARATED_DTBO=true`，dtbo 是独立分区。本项目改动仅为内核配置、不修改 DTS，stock dtbo 依然有效，**请勿重刷 dtbo**。
 
 ## 仓库结构
 
@@ -27,6 +27,7 @@ Droidspaces 检查在 stock LineageOS 内核中缺少两项 **MUST HAVE** 功能
 haydn-droidspaces-kernel/
 ├── .github/workflows/build-haydn.yml   # GitHub Actions 编译流程
 ├── configs/haydn-droidspaces.fragment   # Droidspaces 所需内核配置片段
+├── configs/anykernel.haydn.sh           # AnyKernel3 脚本（AK3 模板格式，仅刷 boot）
 ├── patches/gki/                         # GKI kABI 补丁（必须，防止 bootloop）
 │   ├── 001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
 │   └── 002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch
@@ -60,8 +61,7 @@ git push -u origin main
 编译完成后，进入 **Actions → 最近一次运行 → Artifacts**，下载 `haydn-kernel-droidspaces`，得到：
 
 - `Image.gz-dtb` — 内核镜像（含 dtb）
-- `*.dtbo` — 设备树覆盖（独立分区，不自动嵌入 boot.img）
-- `haydn-droidspaces-kernel.zip` — AnyKernel3 可刷 zip（可选，直接刷入 recovery/fastboot）
+- `haydn-droidspaces-kernel.zip` — AnyKernel3 可刷 zip（仅刷 boot 分区，不触碰 dtbo）
 
 ### 3. 本地打包 boot.img 并刷入
 

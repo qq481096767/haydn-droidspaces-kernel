@@ -28,7 +28,8 @@ jobs:
           sudo apt-get install -y -qq \
             build-essential bc bison flex libssl-dev libncurses5-dev \
             libncursesw5-dev xz-utils curl wget git lz4 cpio python3 \
-            unzip zip p7zip-full device-tree-compiler
+            unzip zip p7zip-full device-tree-compiler \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
       - name: Clone LineageOS haydn kernel source
         run: |
@@ -51,8 +52,9 @@ jobs:
       - name: Apply GKI KABI patches (required for 5.4 GKI, prevents bootloop)
         run: |
           cd kernel
-          patch -p1 < ../patches/gki/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
-          patch -p1 < ../patches/gki/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch
+          # --batch: never prompt on fuzz/reject (a prompt would hang the runner)
+          patch -p1 --batch < ../patches/gki/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
+          patch -p1 --batch < ../patches/gki/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch
 
       - name: Apply Droidspaces kernel config
         run: |
@@ -64,7 +66,9 @@ jobs:
             exit 1
           fi
           echo "Using defconfig: $DEFCONFIG"
-          make ARCH=arm64 "$(basename "$DEFCONFIG")"
+          # kbuild resolves defconfig targets relative to arch/*/configs/,
+          # so vendor defconfigs MUST be invoked with the vendor/ prefix
+          make ARCH=arm64 "${DEFCONFIG#arch/arm64/configs/}"
 
           # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
           while IFS='=' read -r key val; do
@@ -80,10 +84,9 @@ jobs:
             esac
           done < ../configs/haydn-droidspaces.fragment
 
-          # Resolve dependencies and save back to defconfig
+          # Resolve dependencies (.config is the build source of truth;
+          # no savedefconfig churn on the vendor defconfig)
           make ARCH=arm64 olddefconfig
-          make ARCH=arm64 savedefconfig
-          mv defconfig "$DEFCONFIG"
 
           echo "=== Verifying key Droidspaces options ==="
           grep -E 'CONFIG_(PID_NS|IPC_NS|UTS_NS|NAMESPACES|DEVTMPFS|SYSVIPC|POSIX_MQUEUE|SECCOMP)' .config || true
@@ -92,63 +95,31 @@ jobs:
         run: |
           cd kernel
           export PATH="$CLANG_DIR/bin:$PATH"
+          # Linux 5.4 kbuild predates the LLVM=1 make variable (added in 5.9):
+          # pass tools explicitly and let GNU cross binutils handle link/objcopy
+          # (AOSP/LineageOS convention for 5.4 clang builds)
           make ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            LLVM=1 \
-            LLVM_IAS=1 \
-            -j"$(nproc)" Image.gz-dtb dtbo
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            -j"$(nproc)" Image.gz-dtb
 
       - name: Prepare artifacts and AnyKernel3 flashable zip
         run: |
           mkdir -p out
 
-          # Copy kernel image and dtbo
+          # Kernel image only. Our change is config-only (no DTS edits), so the
+          # stock dtbo remains valid and must NOT be re-flashed. Raw *.dtbo
+          # blobs are not a mkdtboimg-packed dtbo.img and must never be flashed.
           cp kernel/arch/arm64/boot/Image.gz-dtb out/Image.gz-dtb
-          if compgen -G "kernel/arch/arm64/boot/dts/qcom/*.dtbo" > /dev/null; then
-            cp kernel/arch/arm64/boot/dts/qcom/*.dtbo out/
-          else
-            echo "WARNING: No dtbo files found"
-            touch out/dtbo.img
-          fi
 
-          # Clone AnyKernel3 and build flashable zip
+          # Clone AnyKernel3 and build flashable zip (boot-only)
           cd out
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           cp Image.gz-dtb anykernel/
-          cp *.dtbo anykernel/ 2>/dev/null || true
-
-          # Write anykernel.sh properties for haydn
-          cat > anykernel/anykernel.sh << 'AKSH'
-#!/system/bin/sh
-# AnyKernel3 by osm0sis
-# Haydn Droidspaces Kernel
-do.devicecheck=1
-do.modules=0
-do.cleanup=1
-do.cleanuponabort=0
-device.name1=haydn
-device.name2=M2012K11C
-device.name3=M2012K11AC
-device.name4=M2012K11G
-device.name5=M2012K11C
-supported.versions=13,14,15,16
-supported.patchlevels=
-do.initd=0
-do.save=0
-
-. /tmp/anykernel/tools/ak2-core.sh;
-
-# Mount partitions
-mount_partitions
-
-# Insert kernel
-write_boot;
-
-# End
-unmount_partitions
-AKSH
+          # anykernel.sh is a real file in the repo (heredocs inside YAML run
+          # blocks break YAML parsing when their content is unindented)
+          cp ../configs/anykernel.haydn.sh anykernel/anykernel.sh
 
           cd anykernel
           zip -r9 ../haydn-droidspaces-kernel.zip . -x '*.git*' '*~' './README.md'
@@ -161,7 +132,6 @@ AKSH
           name: haydn-kernel-droidspaces
           path: |
             out/Image.gz-dtb
-            out/*.dtbo
             out/haydn-droidspaces-kernel.zip
           retention-days: 7
 
@@ -171,8 +141,7 @@ AKSH
         with:
           files: |
             out/Image.gz-dtb
-            out/*.dtbo
             out/haydn-droidspaces-kernel.zip
           tag_name: ${{ github.ref }}
-          release_name: Haydn Kernel Droidspaces ${{ github.ref_name }}
+          name: Haydn Kernel Droidspaces ${{ github.ref_name }}
           generate_release_notes: false
