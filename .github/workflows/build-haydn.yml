@@ -54,16 +54,18 @@ jobs:
       - name: Apply Droidspaces kernel config
         run: |
           cd kernel
-          DEFCONFIG=$(ls arch/arm64/configs/vendor/*qgki*defconfig 2>/dev/null | head -1)
-          if [ -z "$DEFCONFIG" ]; then
-            echo "ERROR: No qgki defconfig found in vendor/"
-            ls arch/arm64/configs/vendor/
-            exit 1
-          fi
-          echo "Using defconfig: $DEFCONFIG"
-          # kbuild resolves defconfig targets relative to arch/*/configs/,
-          # so vendor defconfigs MUST be invoked with the vendor/ prefix
-          make ARCH=arm64 "${DEFCONFIG#arch/arm64/configs/}"
+          # LineageOS builds haydn with THREE configs merged in this exact order
+          # (BoardConfigCommon.mk): base defconfig + debugfs + xiaomi_QGKI.
+          # The xiaomi_QGKI.config enables techpack providers (mi_disp, cnss hw
+          # version helpers) whose symbols are referenced by built-in drivers;
+          # omitting it causes undefined-reference link errors in vmlinux.
+          for frag in vendor/lahaina-qgki_defconfig vendor/debugfs.config vendor/xiaomi_QGKI.config; do
+            if [ ! -f "arch/arm64/configs/$frag" ]; then
+              echo "ERROR: missing config fragment $frag"
+              exit 1
+            fi
+          done
+          make ARCH=arm64 vendor/lahaina-qgki_defconfig vendor/debugfs.config vendor/xiaomi_QGKI.config
 
           # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
           while IFS='=' read -r key val; do
