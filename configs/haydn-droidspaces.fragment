@@ -1,60 +1,26 @@
 # Kernel configurations for full DroidSpaces support (GKI, haydn 5.4)
-# Must be applied together with GKI KABI patches, otherwise bootloop.
+# Based on official Droidspaces GKI documentation:
+# https://www.droidspaces.org/docs/kernel-configuration.html
+# Reference project: quilluna/android_kernel_oneplus_sm8350_ds (OnePlus 9, sm8350, 5.4.302)
 #
-# Device: Xiaomi Redmi K40 Pro (haydn, M2012K11C)
-# Kernel: LineageOS android_kernel_xiaomi_sm8350, lineage-23.2, Linux 5.4 GKI
-# Target: Droidspaces v6.4.0 MUST HAVE + RECOMMENDED features
+# IMPORTANT: GKI kernels keep a fixed ABI. Only enable ABI-safe options.
+# CONFIG_CFS_BANDWIDTH and CONFIG_CGROUP_PIDS BREAK kABI - NEVER enable them.
+# CONFIG_CGROUP_NET_PRIO also caused "struct cgroup has no member id" on haydn 5.4.
 
-# --- IPC mechanisms (required by Droidspaces) ---
+# --- IPC mechanisms (MUST HAVE) ---
 CONFIG_SYSVIPC=y
 CONFIG_POSIX_MQUEUE=y
 
-# --- Core namespace support (required by Droidspaces) ---
+# --- Core namespace support (MUST HAVE) ---
 CONFIG_NAMESPACES=y
 CONFIG_PID_NS=y
 CONFIG_UTS_NS=y
 CONFIG_IPC_NS=y
 
-# --- Seccomp support (required by Droidspaces) ---
+# --- Seccomp support (MUST HAVE) ---
 CONFIG_SECCOMP=y
 CONFIG_SECCOMP_FILTER=y
 
-# --- Hardware access support (recommended by Droidspaces) ---
+# --- Device filesystem support (RECOMMENDED for hardware access) ---
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
-
-# --- Cgroup v1/v2 support (recommended by Droidspaces) ---
-CONFIG_CGROUPS=y
-CONFIG_CGROUP_DEVICE=y
-CONFIG_CGROUP_SCHED=y
-CONFIG_FAIR_GROUP_SCHED=y
-CONFIG_CGROUP_FREEZER=y
-CONFIG_MEMCG=y
-CONFIG_MEMCG_SWAP=y
-CONFIG_CFS_BANDWIDTH=y
-CONFIG_CGROUP_PIDS=y
-CONFIG_CGROUP_CPUACCT=y
-# CONFIG_CGROUP_NET_PRIO is not set - haydn 5.4 struct cgroup has no 'id' member
-# CONFIG_CGROUP_NS is not set - haydn 5.4 cgroup namespace support is incomplete
-
-# --- Networking (optional but recommended by Droidspaces) ---
-CONFIG_NET_NS=y
-CONFIG_VETH=y
-CONFIG_BRIDGE=y
-CONFIG_BRIDGE_NETFILTER=y
-CONFIG_NETFILTER_ADVANCED=y
-CONFIG_NF_CONNTRACK=y
-CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y
-CONFIG_IPV6=y
-CONFIG_IP6_NF_NAT=y
-CONFIG_IP6_NF_TARGET_MASQUERADE=y
-
-# --- Filesystems & devices (optional but recommended by Droidspaces) ---
-CONFIG_OVERLAY_FS=y
-CONFIG_FUSE_FS=y
-CONFIG_TUN=y
-CONFIG_BLK_DEV_LOOP=y
-CONFIG_EXT4_FS=y
-
-# --- Disable Android paranoid network if it blocks container networking ---
-# CONFIG_ANDROID_PARANOID_NETWORK is not set
