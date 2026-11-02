@@ -34,7 +34,7 @@ jobs:
             libncursesw5-dev xz-utils curl wget git lz4 cpio python3 \
             unzip zip p7zip-full device-tree-compiler \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-            clang llvm lld
+            clang llvm lld patch
 
       - name: Clone LineageOS haydn kernel source
         run: |
