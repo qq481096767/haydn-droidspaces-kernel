@@ -107,15 +107,37 @@ if __name__ == "__main__":
     apply_sched_h("include/linux/sched.h")
     apply_user_h("include/linux/sched/user.h")
 
-    # 3. Fix WALT trace.h not found: TRACE_INCLUDE_PATH=. needs -I$(src)
-    makefile = "kernel/sched/walt/Makefile"
-    with open(makefile, "r") as f:
-        mk = f.read()
-    if "ccflags-y" not in mk:
-        with open(makefile, "a") as f:
-            f.write("ccflags-y += -I$(src)\n")
-        print("patched", makefile, "(added ccflags-y += -I$(src))")
-    else:
-        print("INFO:", makefile, "already has ccflags-y")
+    # 3. Fix "TRACE_INCLUDE_PATH . -> trace file not found" globally:
+    #    every directory whose trace header uses TRACE_INCLUDE_PATH "." needs
+    #    -I$(src) in its Makefile so define_trace.h can resolve "./<file>.h".
+    import os
+    fixed_dirs = []
+    for root, dirs, files in os.walk("."):
+        if "/.git" in root or root.startswith("./.git"):
+            continue
+        for fn in files:
+            if not fn.endswith(".h"):
+                continue
+            p = os.path.join(root, fn)
+            try:
+                with open(p, "r", errors="ignore") as f:
+                    txt = f.read()
+            except OSError:
+                continue
+            if "#define TRACE_INCLUDE_PATH ." in txt:
+                mkfile = os.path.join(root, "Makefile")
+                mk = ""
+                if os.path.exists(mkfile):
+                    with open(mkfile, "r", errors="ignore") as f:
+                        mk = f.read()
+                if "ccflags-y" not in mk:
+                    with open(mkfile, "a") as f:
+                        f.write("ccflags-y += -I$(src)\n")
+                    fixed_dirs.append(root)
+                break  # one trace header per directory is enough
+    for d in fixed_dirs:
+        print("patched", d + "/Makefile", "(added ccflags-y += -I$(src))")
+    if not fixed_dirs:
+        print("INFO: no additional TRACE_INCLUDE_PATH directories needed fixing")
 
     print("GKI KABI patches applied successfully (1_2_3 slot)")
