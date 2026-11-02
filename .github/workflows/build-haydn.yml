@@ -49,36 +49,7 @@ jobs:
       - name: Apply GKI KABI patches (required for 5.4 GKI, prevents bootloop)
         run: |
           cd kernel
-          # Replace patch commands with sed to avoid context-mismatch failures
-          # on haydn 5.4 source which differs slightly from the patch's base.
-          
-          # --- sched.h: comment out sysvipc structs inside CONFIG_SYSVIPC block ---
-          sed -i '/#ifdef CONFIG_SYSVIPC/,/#endif/{
-            s/^\( *struct sysv_sem\s*sysvsem;\)/\/\/\1/
-            s/^\( *struct sysv_shm\s*sysvshm;\)/\/\/\1/
-          }' include/linux/sched.h
-          
-          # --- sched.h: add ABI padding after ANDROID_KABI_RESERVE(4) ---
-          if ! grep -q "ANDROID_KABI_USE(1, struct sysv_sem" include/linux/sched.h; then
-            sed -i '/ANDROID_KABI_RESERVE(4);/a\
-\
-#if defined(CONFIG_SYSVIPC)\
-\tANDROID_KABI_USE(1, struct sysv_sem sysvsem);\
-\tANDROID_KABI_USE(1, struct sysv_shm sysvshm);\
-#endif' include/linux/sched.h
-          fi
-          
-          # --- sched/user.h: comment out mq_bytes ---
-          sed -i 's/^\( *unsigned long mq_bytes.*\)/\/\/\1/' include/linux/sched/user.h
-          
-          # --- sched/user.h: add ABI padding after ratelimit_state ---
-          if ! grep -q "ANDROID_KABI_USE(1, unsigned long mq_bytes)" include/linux/sched/user.h; then
-            sed -i '/struct ratelimit_state ratelimit;/a\
-\
-#if defined(CONFIG_POSIX_MQUEUE)\
-\tANDROID_KABI_USE(1, unsigned long mq_bytes);\
-#endif' include/linux/sched/user.h
-          fi
+          python3 ../scripts/apply_gki_kabi.py
 
       - name: Apply Droidspaces kernel config
         run: |
