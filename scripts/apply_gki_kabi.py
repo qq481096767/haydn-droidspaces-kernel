@@ -35,13 +35,13 @@ def apply_sched_h(path):
     content = "".join(new_lines)
 
     # Add ABI padding after ANDROID_KABI_RESERVE(4)
-    if "ANDROID_KABI_USE(1, struct sysv_sem" not in content:
+    if "ANDROID_KABI_USE(4, struct sysv_sem" not in content:
         content = content.replace(
             "ANDROID_KABI_RESERVE(4);\n",
             "ANDROID_KABI_RESERVE(4);\n\n"
             "#if defined(CONFIG_SYSVIPC)\n"
-            "\tANDROID_KABI_USE(1, struct sysv_sem sysvsem);\n"
-            "\tANDROID_KABI_USE(1, struct sysv_shm sysvshm);\n"
+            "\tANDROID_KABI_USE(4, struct sysv_sem sysvsem);\n"
+            "\tANDROID_KABI_USE(4, struct sysv_shm sysvshm);\n"
             "#endif\n",
         )
 
