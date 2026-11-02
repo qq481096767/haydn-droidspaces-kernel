@@ -16,6 +16,10 @@ jobs:
 
       - name: Create swap (prevent OOM on 2GB runner)
         run: |
+          # GitHub-hosted runners already mount /swapfile ("Text file busy"
+          # if we skip this), so disable and recreate it
+          sudo swapoff -a || true
+          sudo rm -f /swapfile
           sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
