@@ -120,7 +120,7 @@ jobs:
 
           cd anykernel
           zip -r9 ../haydn-droidspaces-kernel.zip . -x '*.git*' '*~' './README.md'
-          cd ..
+          cd ../..
           ls -lh out/
 
       - name: Upload artifacts
