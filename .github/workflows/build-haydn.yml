@@ -92,11 +92,14 @@ jobs:
         run: |
           cd kernel
           # 5.4 kernel: clang + GNU cross binutils (LLVM=1 variable is 5.9+)
+          # haydn/LineageOS builds the uncompressed 'Image' target
+          # (BOARD_KERNEL_IMAGE_NAME := Image); dtb lives in the separate
+          # dtbo partition, so no appended-dtb target exists here.
           make ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            -j"$(nproc)" Image.gz-dtb
+            -j"$(nproc)" Image
 
       - name: Prepare artifacts and AnyKernel3 flashable zip
         run: |
@@ -105,12 +108,12 @@ jobs:
           # Kernel image only. Our change is config-only (no DTS edits), so the
           # stock dtbo remains valid and must NOT be re-flashed. Raw *.dtbo
           # blobs are not a mkdtboimg-packed dtbo.img and must never be flashed.
-          cp kernel/arch/arm64/boot/Image.gz-dtb out/Image.gz-dtb
+          cp kernel/arch/arm64/boot/Image out/Image
 
           # Clone AnyKernel3 and build flashable zip (boot-only)
           cd out
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
-          cp Image.gz-dtb anykernel/
+          cp Image anykernel/
           # anykernel.sh is a real file in the repo (heredocs inside YAML run
           # blocks break YAML parsing when their content is unindented)
           cp ../configs/anykernel.haydn.sh anykernel/anykernel.sh
@@ -125,7 +128,7 @@ jobs:
         with:
           name: haydn-kernel-droidspaces
           path: |
-            out/Image.gz-dtb
+            out/Image
             out/haydn-droidspaces-kernel.zip
           retention-days: 7
 
@@ -134,7 +137,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/Image.gz-dtb
+            out/Image
             out/haydn-droidspaces-kernel.zip
           tag_name: ${{ github.ref }}
           name: Haydn Kernel Droidspaces ${{ github.ref_name }}
