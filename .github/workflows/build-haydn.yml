@@ -33,7 +33,8 @@ jobs:
             build-essential bc bison flex libssl-dev libncurses5-dev \
             libncursesw5-dev xz-utils curl wget git lz4 cpio python3 \
             unzip zip p7zip-full device-tree-compiler \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            clang llvm lld
 
       - name: Clone LineageOS haydn kernel source
         run: |
@@ -44,19 +45,6 @@ jobs:
           git log --oneline -1
           echo "=== Available defconfigs ==="
           ls arch/arm64/configs/vendor/
-
-      - name: Download LineageOS prebuilt clang toolchain (lineage-23.2, clang-r487747c)
-        run: |
-          # NOTE: do NOT use `git clone` here. actions/checkout unsets
-          # http.extraheader on the runner, so a plain HTTPS clone prompts for
-          # a username and hangs the job. Fetch the tarball instead.
-          mkdir -p toolchains/clang
-          cd toolchains/clang
-          curl -fsSL --max-time 300 \
-            "https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r487747c/archive/refs/heads/main.tar.gz" \
-            | tar -xz --strip-components=1
-          echo "CLANG_DIR=$GITHUB_WORKSPACE/toolchains/clang" >> $GITHUB_ENV
-          ls bin/clang*
 
       - name: Apply GKI KABI patches (required for 5.4 GKI, prevents bootloop)
         run: |
@@ -103,10 +91,7 @@ jobs:
       - name: Build kernel image
         run: |
           cd kernel
-          export PATH="$CLANG_DIR/bin:$PATH"
-          # Linux 5.4 kbuild predates the LLVM=1 make variable (added in 5.9):
-          # pass tools explicitly and let GNU cross binutils handle link/objcopy
-          # (AOSP/LineageOS convention for 5.4 clang builds)
+          # 5.4 kernel: clang + GNU cross binutils (LLVM=1 variable is 5.9+)
           make ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
