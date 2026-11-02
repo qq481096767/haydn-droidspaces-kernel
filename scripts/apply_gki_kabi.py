@@ -106,4 +106,16 @@ def apply_user_h(path):
 if __name__ == "__main__":
     apply_sched_h("include/linux/sched.h")
     apply_user_h("include/linux/sched/user.h")
+
+    # 3. Fix WALT trace.h not found: TRACE_INCLUDE_PATH=. needs -I$(src)
+    makefile = "kernel/sched/walt/Makefile"
+    with open(makefile, "r") as f:
+        mk = f.read()
+    if "ccflags-y" not in mk:
+        with open(makefile, "a") as f:
+            f.write("ccflags-y += -I$(src)\n")
+        print("patched", makefile, "(added ccflags-y += -I$(src))")
+    else:
+        print("INFO:", makefile, "already has ccflags-y")
+
     print("GKI KABI patches applied successfully (1_2_3 slot)")
