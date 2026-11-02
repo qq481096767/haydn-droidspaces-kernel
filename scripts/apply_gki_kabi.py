@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Apply GKI KABI padding patches to haydn 5.4 kernel source.
 
-Strictly follows the official Droidspaces GKI patches:
+haydn 5.4 kernel ALREADY has ANDROID_KABI_RESERVE(1,2) in user_struct
+and ANDROID_KABI_RESERVE(6,7,8) in task_struct, so we only need to
+add ANDROID_KABI_USE() to occupy those reserved slots when the
+corresponding config is enabled, plus comment out the original field
+declarations inside CONFIG_* blocks.
+
+Follows the spirit of official Droidspaces GKI patches:
 - patches/gki/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
 - patches/gki/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch
 """
@@ -16,7 +22,6 @@ def apply_sched_h(path):
     new_lines = []
     in_sysvipc_block = False
     for line in lines:
-        # Comment out sysvsem/sysvshm fields inside CONFIG_SYSVIPC block in task_struct
         if "#ifdef CONFIG_SYSVIPC" in line:
             in_sysvipc_block = True
             new_lines.append(line)
@@ -36,20 +41,17 @@ def apply_sched_h(path):
 
     content = "".join(new_lines)
 
-    # Insert ABI padding after ANDROID_KABI_RESERVE(5) in task_struct
-    # Official patch: use slots 6, 7, 8 with _ANDROID_KABI_REPLACE
-    # Only insert if not already patched (avoid duplicate on re-runs)
-    if "#ifdef CONFIG_SYSVIPC\n\tANDROID_KABI_USE(6, struct sysv_sem" not in content:
+    # task_struct already has ANDROID_KABI_RESERVE(6),(7),(8) in haydn 5.4.
+    # Only add ANDROID_KABI_USE() when CONFIG_SYSVIPC is enabled.
+    # Find the task_struct ABI reserved block end and insert USE there.
+    marker = "ANDROID_KABI_RESERVE(8);\n"
+    if marker in content and "ANDROID_KABI_USE(6, struct sysv_sem" not in content:
         content = content.replace(
-            "ANDROID_KABI_RESERVE(5);\n",
-            "ANDROID_KABI_RESERVE(5);\n\n"
+            marker,
+            marker + "\n"
             "#ifdef CONFIG_SYSVIPC\n"
             "\tANDROID_KABI_USE(6, struct sysv_sem sysvsem);\n"
-            "\t_ANDROID_KABI_REPLACE(ANDROID_KABI_RESERVE(7); ANDROID_KABI_RESERVE(8), struct sysv_shm sysvshm);\n"
-            "#else\n"
-            "\tANDROID_KABI_RESERVE(6);\n"
-            "\tANDROID_KABI_RESERVE(7);\n"
-            "\tANDROID_KABI_RESERVE(8);\n"
+            "\tANDROID_KABI_USE(7, struct sysv_shm sysvshm);\n"
             "#endif\n",
         )
 
@@ -62,7 +64,7 @@ def apply_user_h(path):
     with open(path, "r") as f:
         content = f.read()
 
-    # Comment out mq_bytes line inside CONFIG_POSIX_MQUEUE
+    # Comment out mq_bytes inside CONFIG_POSIX_MQUEUE block
     content = re.sub(
         r"^(\s*)unsigned long mq_bytes.*$",
         r"\1// unsigned long mq_bytes;  // How many bytes can be allocated to mqueue?",
@@ -70,20 +72,15 @@ def apply_user_h(path):
         flags=re.MULTILINE,
     )
 
-    # Insert ABI padding after struct ratelimit_state ratelimit;
-    # Official patch: use slot 1 for mq_bytes, then RESERVE(2)
-    if "ANDROID_KABI_USE(1, unsigned long mq_bytes)" not in content:
+    # user_struct already has ANDROID_KABI_RESERVE(1),(2) in haydn 5.4.
+    # Only add ANDROID_KABI_USE() when CONFIG_POSIX_MQUEUE is enabled.
+    marker = "ANDROID_KABI_RESERVE(2);\n"
+    if marker in content and "ANDROID_KABI_USE(1, unsigned long mq_bytes)" not in content:
         content = content.replace(
-            "struct ratelimit_state ratelimit;\n",
-            "struct ratelimit_state ratelimit;\n\n"
-            "#if defined(CONFIG_POSIX_MQUEUE)\n"
+            marker,
+            marker + "\n"
+            "#ifdef CONFIG_POSIX_MQUEUE\n"
             "\tANDROID_KABI_USE(1, unsigned long mq_bytes);\n"
-            "\tANDROID_KABI_RESERVE(2);\n"
-            "\tANDROID_OEM_DATA_ARRAY(1, 2);\n"
-            "#else\n"
-            "\tANDROID_KABI_RESERVE(1);\n"
-            "\tANDROID_KABI_RESERVE(2);\n"
-            "\tANDROID_OEM_DATA_ARRAY(1, 2);\n"
             "#endif\n",
         )
 
