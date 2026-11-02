@@ -73,11 +73,14 @@ def apply_user_h(path):
     with open(path, "r") as f:
         content = f.read()
 
-    # 1. Comment out mq_bytes inside CONFIG_POSIX_MQUEUE block
+    # 1. Comment out mq_bytes inside CONFIG_POSIX_MQUEUE block.
+    #    haydn has an intervening comment line "/* protected by mq_lock */"
+    #    between the #ifdef and the declaration, so match the declaration itself.
     content = re.sub(
-        r"(#ifdef CONFIG_POSIX_MQUEUE\n)(\s*)unsigned long mq_bytes.*\n",
-        r"\1\2// unsigned long mq_bytes;  // covered by ANDROID_KABI_RESERVE(1)\n",
+        r"^(\s*)unsigned long mq_bytes;.*$",
+        r"\1// unsigned long mq_bytes;  // covered by ANDROID_KABI_USE(1)",
         content,
+        flags=re.MULTILINE,
     )
 
     # 2. Replace RESERVE(1);RESERVE(2); block with #ifdef CONFIG_POSIX_MQUEUE block
