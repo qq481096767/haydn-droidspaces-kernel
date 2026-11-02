@@ -2,13 +2,17 @@
 """Apply GKI KABI padding patches to haydn 5.4 kernel source.
 
 haydn 5.4 kernel ALREADY has:
-- task_struct: ANDROID_KABI_RESERVE(6), (7), (8)
+- task_struct: ANDROID_KABI_RESERVE(1)..(8) at end of struct
 - user_struct: ANDROID_KABI_RESERVE(1), (2)
 
-We must REPLACE those existing RESERVE lines with
-#ifdef CONFIG_SYSVIPC ... ANDROID_KABI_USE(...) ... #else ... RESERVE(...) #endif
-blocks, matching the official Droidspaces GKI patch semantics, WITHOUT
-adding duplicate RESERVE/USE macros.
+We must:
+1. Comment out original sysvsem/sysvshm declarations inside CONFIG_SYSVIPC block
+   (they are relocated to ABI reserved slots below)
+2. Replace existing ANDROID_KABI_RESERVE(6);(7);(8); in task_struct with
+   #ifdef CONFIG_SYSVIPC ... ANDROID_KABI_USE(6)/_ANDROID_KABI_REPLACE(...) ... #else ... RESERVE(6/7/8) ... #endif
+3. Comment out mq_bytes inside CONFIG_POSIX_MQUEUE block
+4. Replace existing ANDROID_KABI_RESERVE(1);(2); in user_struct with
+   #ifdef CONFIG_POSIX_MQUEUE ... ANDROID_KABI_USE(1) ... #else ... RESERVE(1/2) ... #endif
 
 Follows official Droidspaces GKI patches:
 - 001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
@@ -22,8 +26,7 @@ def apply_sched_h(path):
     with open(path, "r") as f:
         content = f.read()
 
-    # 1. Comment out original struct declarations inside CONFIG_SYSVIPC block
-    #    (task_struct ~line 1074)
+    # 1. Comment out original sysvsem/sysvshm inside CONFIG_SYSVIPC block (~line 1074)
     content = re.sub(
         r"(#ifdef CONFIG_SYSVIPC\n)(\s*)struct sysv_sem\s+sysvsem;\n(\s*)struct sysv_shm\s+sysvshm;\n",
         r"\1\2// struct sysv_sem sysvsem;\n\3// struct sysv_shm sysvshm;\n",
@@ -31,7 +34,7 @@ def apply_sched_h(path):
     )
 
     # 2. Replace existing ANDROID_KABI_RESERVE(6);(7);(8); with
-    #    #ifdef CONFIG_SYSVIPC ... USE(6)/USE(7) ... #else ... RESERVE(6/7/8) ... #endif
+    #    #ifdef CONFIG_SYSVIPC ... USE(6)/_ANDROID_KABI_REPLACE(...) ... #else ... RESERVE(6/7/8) ... #endif
     old = "ANDROID_KABI_RESERVE(6);\nANDROID_KABI_RESERVE(7);\nANDROID_KABI_RESERVE(8);\n"
     new = ("#ifdef CONFIG_SYSVIPC\n"
            "\tANDROID_KABI_USE(6, struct sysv_sem sysvsem);\n"
