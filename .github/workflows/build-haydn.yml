@@ -79,29 +79,37 @@ jobs:
       - name: Apply Droidspaces kernel config
         run: |
           cd kernel
-          # Belt-and-suspenders: ensure Neutron clang is first in PATH here
           export PATH="$GITHUB_WORKSPACE/neutron-clang/bin:$PATH"
           echo "=== toolchain probe ==="
           which clang; clang --version | head -1
           which ld.lld; ld.lld -v 2>&1 | head -1
-          # LineageOS builds haydn with THREE configs merged in this exact order
-          # (BoardConfigCommon.mk): base defconfig + debugfs + xiaomi_QGKI.
-          # The xiaomi_QGKI.config enables techpack providers (mi_disp, cnss hw
-          # version helpers) whose symbols are referenced by built-in drivers;
-          # omitting it causes undefined-reference link errors in vmlinux.
-          for frag in vendor/lahaina-qgki_defconfig vendor/debugfs.config vendor/xiaomi_QGKI.config; do
-            if [ ! -f "arch/arm64/configs/$frag" ]; then
-              echo "ERROR: missing config fragment $frag"
-              exit 1
-            fi
-          done
-          # CC/LD must be passed here too: kconfig probes the toolchain
-          # (CC_IS_CLANG, CC_HAS_LTO, ld.lld support) during defconfig;
-          # with the default host cc it silently disables LTO/CFI/SCS.
-          # LLVM=1 + LLVM_IAS=1 matches quilluna's proven build setup.
+
+          # quilluna approach: use the FULL stock kernel config (extracted via
+          # extract-ikconfig from the stock boot image, committed at
+          # configs/haydn-stock.config) as the base. Probe-type symbols
+          # (CLANG_VERSION, CC_IS_CLANG, ...) are stored as user values and
+          # survive olddefconfig even if probing glitches; a defconfig run
+          # would re-probe and silently disable LTO/CFI/SCS.
+          cp ../configs/haydn-stock.config .config
+
+          # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
+          while IFS='=' read -r key val; do
+            # Skip comments and blank lines
+            case "$key" in
+              \#*|"") continue ;;
+            esac
+            case "$val" in
+              y) scripts/config --file .config --enable "$key" ;;
+              n) scripts/config --file .config --disable "$key" ;;
+              m) scripts/config --file .config --module "$key" ;;
+              *) scripts/config --file .config --set-str "$key" "$val" ;;
+            esac
+          done < ../configs/haydn-droidspaces.fragment
+
+          # Resolve dependencies only (keeps user values for probe symbols)
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            vendor/lahaina-qgki_defconfig vendor/debugfs.config vendor/xiaomi_QGKI.config
+            olddefconfig
 
           # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
           while IFS='=' read -r key val; do
