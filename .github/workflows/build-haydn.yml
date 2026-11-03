@@ -110,14 +110,13 @@ jobs:
             esac
           done < ../configs/haydn-droidspaces.fragment
 
-          # Resolve dependencies only (keeps user values for probe symbols).
-          # CC/LD on the COMMAND LINE are auto-exported by make to the conf
-          # child process; Makefile-internal assignment is NOT reliably
-          # visible to kconfig's $(shell) probes (CLANG_VERSION came out 0).
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
+          # env-prefix: write toolchain vars into the real process environment
+          # so the conf child's kconfig $(shell) probes (CLANG_VERSION etc.)
+          # ALWAYS see them, regardless of make's variable-export semantics.
+          env CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
             STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
             HOSTCC=clang HOSTCXX=clang++ \
+            make ARCH=arm64 LLVM=1 LLVM_IAS=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             olddefconfig
 
