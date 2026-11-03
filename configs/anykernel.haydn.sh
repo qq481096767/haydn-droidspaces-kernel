@@ -2,7 +2,7 @@
 # AnyKernel3 — Haydn Droidspaces Kernel (boot-only flash)
 # Follows the osm0sis/AnyKernel3 template: ak3-core.sh + split_boot/write_boot.
 # Config-only kernel change (no DTS edits): dtbo is left untouched.
-kernel.string=Haydn Droidspaces Kernel (PID_NS + IPC_NS)
+kernel.string=Haydn Droidspaces Kernel PID_NS-IPC_NS
 do.systemcheck=1
 do.modules=0
 do.cleanup=1
