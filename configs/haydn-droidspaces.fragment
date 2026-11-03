@@ -26,3 +26,6 @@ CONFIG_SECCOMP_FILTER=y
 # conflicts with Android init/ueventd coldboot and bootloops.
 CONFIG_DEVTMPFS=y
 # CONFIG_DEVTMPFS_MOUNT is not set
+
+# --- Networking (MUST, per official GKI guide: Enhanced NAT support) ---
+CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
