@@ -99,6 +99,7 @@ jobs:
           curl -sLO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
           chmod +x antman
           ./antman -S=latest
+          ./antman --patch=glibc
           ./bin/clang --version
           ls bin/ | grep -E "^ld.lld|^llvm-ar" || true
 
