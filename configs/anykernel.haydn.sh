@@ -17,11 +17,13 @@ do.cleanuponabort=0
 supported.versions=
 supported.patchlevels=
 supported.vendorpatchlevels=
-block=auto
-is_slot_device=1
-ramdisk_compression=auto
 '; } # end properties
 
+# boot shell variables (uppercase - read by ak3-core.sh)
+BLOCK=auto;
+IS_SLOT_DEVICE=1;
+RAMDISK_COMPRESSION=auto;
+PATCH_VBMETA_FLAG=auto;
 
 ### AnyKernel install
 ## boot-only flash: replace kernel in the current slot, keep ramdisk/dtb
