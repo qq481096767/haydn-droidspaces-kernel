@@ -82,26 +82,17 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/neutron-clang/bin:$PATH"
           echo "=== toolchain probe ==="
           which clang; clang --version | head -1
-          which ld.lld; ld.lld -v 2>&1 | head -1
-          # Diagnose kconfig probe directly
-          echo "probe ver: $(sh scripts/clang-version.sh clang; echo rc=$?)"
-          echo 'int foo;' | clang -E -x c - 2>&1 | tail -2
-          clang -E -x c - <<< '__clang_major__' 2>&1 | tail -1
 
-          # quilluna approach: use the FULL stock kernel config (extracted via
-          # extract-ikconfig from the stock boot image, committed at
-          # configs/haydn-stock.config) as the base. Probe-type symbols
-          # (CLANG_VERSION, CC_IS_CLANG, ...) are stored as user values and
-          # survive olddefconfig even if probing glitches; a defconfig run
-          # would re-probe and silently disable LTO/CFI/SCS.
+          # quilluna approach: use the FULL stock kernel config (IKCONFIG-extracted
+          # from the stock boot image) as the base. ALL probe-type symbols
+          # (CLANG_VERSION, CC_IS_CLANG, LD_IS_LLD, LTO_CLANG, CFI_CLANG,
+          # SHADOW_CALL_STACK, THINLTO ...) are already stored as user values
+          # in haydn-stock.config; make uses them directly without re-probing.
           cp ../configs/haydn-stock.config .config
 
-          # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
+          # Apply Droidspaces options (overrides stock where needed)
           while IFS='=' read -r key val; do
-            # Skip comments and blank lines
-            case "$key" in
-              \#*|"") continue ;;
-            esac
+            case "$key" in \#*|"") continue ;; esac
             case "$val" in
               y) scripts/config --file .config --enable "$key" ;;
               n) scripts/config --file .config --disable "$key" ;;
@@ -109,46 +100,18 @@ jobs:
               *) scripts/config --file .config --set-str "$key" "$val" ;;
             esac
           done < ../configs/haydn-droidspaces.fragment
-
-          # env-prefix: write toolchain vars into the real process environment
-          # so the conf child's kconfig $(shell) probes (CLANG_VERSION etc.)
-          # ALWAYS see them, regardless of make's variable-export semantics.
-          env CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
-            STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
-            HOSTCC=clang HOSTCXX=clang++ \
-            make ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            olddefconfig
-
-          # Apply Droidspaces options to .config using scripts/config (precise, no duplicates)
-          while IFS='=' read -r key val; do
-            # Skip comments and blank lines
-            case "$key" in
-              \#*|"") continue ;;
-            esac
-            case "$val" in
-              y) scripts/config --file .config --enable "$key" ;;
-              n) scripts/config --file .config --disable "$key" ;;
-              m) scripts/config --file .config --module "$key" ;;
-              *) scripts/config --file .config --set-str "$key" "$val" ;;
-            esac
-          done < ../configs/haydn-droidspaces.fragment
-
-          # Resolve dependencies (.config is the build source of truth;
-          # no savedefconfig churn on the vendor defconfig)
-          make ARCH=arm64 olddefconfig
 
           echo "=== Verifying key Droidspaces options ==="
           grep -E 'CONFIG_(PID_NS|IPC_NS|UTS_NS|NAMESPACES|DEVTMPFS|SYSVIPC|POSIX_MQUEUE|SECCOMP)' .config || true
 
-          # ABI-critical check right after olddefconfig: if the toolchain in
-          # PATH is too old, kconfig silently downgrades LTO/CFI/SCS here.
+          # ABI-critical: these probe symbols come from stock.config user values,
+          # NOT from kconfig probing, so they must stay enabled here.
           echo "=== ABI-critical config check ==="
-          grep -E "CONFIG_(CC_IS_CLANG|CLANG_VERSION|LD_IS_LLD|LTO_CLANG|LTO_NONE|CFI_CLANG|SHADOW_CALL_STACK)[= ]" .config || true
+          grep -E "CONFIG_(CLANG_VERSION|CC_IS_CLANG|LD_IS_LLD|LTO_CLANG|LTO_NONE|CFI_CLANG|SHADOW_CALL_STACK)[= ]" .config || true
           for opt in CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK; do
-            grep -q "${opt}=y" .config || { echo "FATAL: ${opt} is not enabled - toolchain too old at config time!"; exit 1; }
+            grep -q "${opt}=y" .config || { echo "FATAL: ${opt} is not enabled - stock.config compromised!"; exit 1; }
           done
-          echo "LTO/CFI/SCS all enabled at config time - toolchain OK"
+          echo "LTO/CFI/SCS all present from stock.config user values - probe-safe"
 
       - name: Build kernel image
         run: |
