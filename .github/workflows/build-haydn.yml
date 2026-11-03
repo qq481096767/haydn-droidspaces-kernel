@@ -80,6 +80,11 @@ jobs:
       - name: Apply Droidspaces kernel config
         run: |
           cd kernel
+          # Belt-and-suspenders: ensure Neutron clang is first in PATH here
+          export PATH="$GITHUB_WORKSPACE/neutron-clang/bin:$PATH"
+          echo "=== toolchain probe ==="
+          which clang; clang --version | head -1
+          which ld.lld; ld.lld -v 2>&1 | head -1
           # LineageOS builds haydn with THREE configs merged in this exact order
           # (BoardConfigCommon.mk): base defconfig + debugfs + xiaomi_QGKI.
           # The xiaomi_QGKI.config enables techpack providers (mi_disp, cnss hw
@@ -130,6 +135,7 @@ jobs:
           # ABI-critical check right after olddefconfig: if the toolchain in
           # PATH is too old, kconfig silently downgrades LTO/CFI/SCS here.
           echo "=== ABI-critical config check ==="
+          grep -E "CONFIG_(CC_IS_CLANG|CLANG_VERSION|LD_IS_LLD|LTO_CLANG|LTO_NONE|CFI_CLANG|SHADOW_CALL_STACK)[= ]" .config || true
           for opt in CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK; do
             grep -q "${opt}=y" .config || { echo "FATAL: ${opt} is not enabled - toolchain too old at config time!"; exit 1; }
           done
