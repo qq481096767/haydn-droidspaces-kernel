@@ -83,6 +83,10 @@ jobs:
           echo "=== toolchain probe ==="
           which clang; clang --version | head -1
           which ld.lld; ld.lld -v 2>&1 | head -1
+          # Diagnose kconfig probe directly
+          echo "probe ver: $(sh scripts/clang-version.sh clang; echo rc=$?)"
+          echo 'int foo;' | clang -E -x c - 2>&1 | tail -2
+          clang -E -x c - <<< '__clang_major__' 2>&1 | tail -1
 
           # quilluna approach: use the FULL stock kernel config (extracted via
           # extract-ikconfig from the stock boot image, committed at
