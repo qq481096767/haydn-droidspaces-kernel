@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 150
 
     steps:
       - name: Checkout repository
@@ -88,18 +88,45 @@ jobs:
           echo "=== Verifying key Droidspaces options ==="
           grep -E 'CONFIG_(PID_NS|IPC_NS|UTS_NS|NAMESPACES|DEVTMPFS|SYSVIPC|POSIX_MQUEUE|SECCOMP)' .config || true
 
+      - name: Download Neutron Clang toolchain
+        run: |
+          # GKI kernels MUST be built with an Android clang (LTO+CFI+SCS).
+          # Ubuntu clang 14 silently downgrades LTO_CLANG/CFI/SCS -> vendor
+          # modules (built with CFI+SCS) crash the kernel at boot.
+          # Reference: quilluna/android_kernel_oneplus_sm8350_ds (Neutron Clang).
+          mkdir -p "$GITHUB_WORKSPACE/neutron-clang"
+          cd "$GITHUB_WORKSPACE/neutron-clang"
+          curl -sLO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
+          chmod +x antman
+          ./antman -S=latest
+          ./bin/clang --version
+          ls bin/ | grep -E "^ld.lld|^llvm-ar" || true
+
       - name: Build kernel image
         run: |
           cd kernel
-          # 5.4 kernel: clang + GNU cross binutils (LLVM=1 variable is 5.9+)
-          # haydn/LineageOS builds the uncompressed 'Image' target
-          # (BOARD_KERNEL_IMAGE_NAME := Image); dtb lives in the separate
-          # dtbo partition, so no appended-dtb target exists here.
+          # Full LLVM toolchain is REQUIRED for LTO/CFI/SCS to stay enabled
+          export PATH="$GITHUB_WORKSPACE/neutron-clang/bin:$PATH"
           make ARCH=arm64 \
             CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            STRIP=llvm-strip \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            HOSTCC=clang \
+            HOSTCXX=clang++ \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             -j"$(nproc)" Image
+
+          # Verify the security/ABI features did NOT get downgraded
+          echo "=== ABI-critical config check ==="
+          for opt in CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK; do
+            grep -q "${opt}=y" .config || { echo "FATAL: ${opt} is not enabled - toolchain too old!"; exit 1; }
+          done
+          echo "LTO/CFI/SCS all enabled - toolchain OK"
 
       - name: Prepare artifacts and AnyKernel3 flashable zip
         run: |
