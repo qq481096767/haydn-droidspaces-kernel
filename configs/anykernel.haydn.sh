@@ -17,6 +17,9 @@ do.cleanuponabort=0
 supported.versions=
 supported.patchlevels=
 supported.vendorpatchlevels=
+block=auto
+is_slot_device=1
+ramdisk_compression=auto
 '; } # end properties
 
 
