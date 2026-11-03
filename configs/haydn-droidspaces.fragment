@@ -22,5 +22,7 @@ CONFIG_SECCOMP=y
 CONFIG_SECCOMP_FILTER=y
 
 # --- Device filesystem support (RECOMMENDED for hardware access) ---
+# NOTE: DEVTMPFS_MOUNT must stay OFF on Android - auto-mounting /dev
+# conflicts with Android init/ueventd coldboot and bootloops.
 CONFIG_DEVTMPFS=y
-CONFIG_DEVTMPFS_MOUNT=y
+# CONFIG_DEVTMPFS_MOUNT is not set
