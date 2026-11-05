@@ -14,6 +14,17 @@ Xiaomi Redmi K40 Pro (haydn, M2012K11C) 专用内核，开启 Droidspaces 所需
 
 可选项（非必需）保持关闭：Macvlan、IPv6 NAT、CPU limit（CFS_BANDWIDTH）、Process limit（CGROUP_PIDS）、User namespaces。其中 CFS_BANDWIDTH / CGROUP_PIDS 会破坏 kABI 导致 vendor 模块拒载 → bootloop，已在配置片段中明确禁用；USER_NS 关闭符合 Droidspaces 硬化建议。
 
+## 支持机型
+
+本项目基于 LineageOS haydn 内核源码 (`android_kernel_xiaomi_sm8350`, `lineage-23.2`)，该源码同时服务于以下机型（共享同一内核代码库）：
+
+| 机型 | 代号 | 型号 | 备注 |
+|------|------|------|------|
+| Redmi K40 Pro | haydn (variant2) | M2012K11C | 本项目主测机型 |
+| Mi 11i（国际版） | haydn (variant1) | M2011K10G | 同内核源码，内核配置可通用 |
+
+> Mi 11i 与 Redmi K40 Pro 共享 `android_kernel_xiaomi_sm8350` 内核源码，本项目编出的内核 Image 在两款机型上配置相同。但 dtbo 分区和部分分区布局可能存在差异，Mi 11i 用户刷入前请务必先用 `fastboot boot` 临时验证，确认无误后再正式刷入。
+
 ## 背景
 
 Droidspaces 检查在 stock LineageOS 内核中缺少两项 **MUST HAVE** 功能：
@@ -121,15 +132,6 @@ fastboot flash boot_b boot.img
    - devtmpfs（推荐项）
 
 若任一 REQUIRED 项仍为 `[✗]`，请在设备上执行 `zcat /proc/config.gz | grep PID_NS` 确认是否为 `y`（haydn 无 `/proc/config.gz` 时需从 IKCONFIG 提取）。
-
-## 与其他项目的对比改进
-
-| 项目 | 改进点 |
-|------|--------|
-| `charan-gn/guacamole-droidspaces-kernel` | 使用 LineageOS 预编译 clang 工具链（非系统 GCC/Clang，避免不启动） |
-| `onyx-oss/konoha-kernel-gki` | GitHub Actions 创建 8GB swap 防止 OOM |
-| `daglaroglou/android_kernel_samsung_a54x` | 使用 `scripts/config` 精确修改内核配置，避免重复/冲突行 |
-| 通用 GKI 项目 | 加入 `--header_version 3` 和 haydn 专用内核 cmdline |
 
 ## 故障排查
 
