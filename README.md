@@ -6,8 +6,8 @@ Xiaomi Redmi K40 Pro (haydn, M2012K11C) 专用内核，开启 Droidspaces 所需
 
 编译已成功并在真机验证：
 
-- **GitHub Actions**：Run #b930733 编译成功（commit `b930733`）
-- **临时启动**：`fastboot boot test-final.img` 正常进入系统，无 bootloop
+- **GitHub Actions**：Run #45 编译成功（commit `128b76f`，源码 `7ede20c8692e`，与设备 `uname -a` 一致）
+- **临时启动**：`fastboot boot test-final-run45.img` 正常进入系统，无 bootloop
 - **Droidspaces v7.1.0 Check Requirements**：**全部 REQUIRED 功能 [✓]**
   - Root privileges、Linux version、PID namespace、Mount namespace、UTS namespace、IPC namespace、pivot_root、/proc、/sys、Seccomp —— 全部通过
   - devtmpfs（推荐项）亦已开启
@@ -47,14 +47,13 @@ Droidspaces 检查在 stock LineageOS 内核中缺少两项 **MUST HAVE** 功能
 
 ```
 haydn-droidspaces-kernel/
-├── .github/workflows/build-haydn.yml   # GitHub Actions 编译流程
+├── .github/workflows/build-haydn.yml   # GitHub Actions 编译流程（手动 workflow_dispatch 触发，推送不自动编译）
 ├── configs/haydn-droidspaces.fragment   # Droidspaces 所需内核配置片段（MUST HAVE 覆盖项）
 ├── configs/haydn-stock.config           # 从 stock boot.img IKCONFIG 提取的完整基准配置（含 LTO/CFI/SCS=y 用户值）
 ├── configs/anykernel.haydn.sh           # AnyKernel3 脚本（AK3 模板格式，仅刷 boot，不触碰 dtbo）
 ├── patches/gki/                         # GKI kABI 补丁（必须，防止 bootloop）
 │   ├── 001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
 │   └── 002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch
-├── scripts/pack-boot.sh                 # 本地打包 boot.img + fastboot 测试/刷入
 ├── scripts/apply_gki_kabi.py            # kABI 补丁应用脚本（官方 1_2_3 槽位，haydn 已占用 6/7/8）
 └── README.md
 ```
@@ -65,7 +64,7 @@ haydn-droidspaces-kernel/
 
 ## 使用方法
 
-### 1. 推送到 GitHub 触发编译
+### 1. 推送到 GitHub
 
 在 GitHub 上创建一个新仓库（公开或私有均可），将本文件夹的全部内容推送上去：
 
@@ -78,7 +77,7 @@ git remote add origin https://github.com/<你的用户名>/haydn-droidspaces-ker
 git push -u origin main
 ```
 
-推送后，GitHub Actions 会自动开始编译（在 **Actions → Build Haydn Kernel for Droidspaces** 查看进度）。
+推送后 **不会自动编译**。编译需手动在 **Actions → Build Haydn Kernel for Droidspaces → Run workflow** 触发。
 
 ### 2. 下载产物
 
@@ -106,19 +105,20 @@ su -c "dd if=/dev/block/by-name/boot_b of=/sdcard/boot_b-backup.img"
 adb pull /sdcard/boot_b-backup.img ./boot_b-backup.img
 ```
 
-打包新 boot.img（使用新 Image + 原 Magisk ramdisk，可参考 scripts/pack-boot.sh）：
+打包新 boot.img（使用新 Image + 原 Magisk ramdisk，原 magiskboot 可在手机 /data/adb/magisk/ 找到）：
 
 ```bash
-cd /root/haydn-droidspaces-kernel/scripts
-
-# 仅打包（或按 pack-boot.sh 用法）
-./pack-boot.sh --kernel Image --boot boot.img pack
-
-# 临时启动测试（不刷入，推荐先执行，失败重启即恢复）
-fastboot boot boot.img
-
-# 确认能正常进入系统后，正式刷入 B 槽（A 槽保留当前可用镜像做备份）
-fastboot flash boot_b boot.img
+# 手机 root shell 里：解包当前 boot
+/data/adb/magisk/magiskboot unpack /sdcard/boot_b-backup.img
+# 替换 kernel（把 Image 推到手机 /sdcard/ 后）
+cp /sdcard/Image kernel
+# 重打包（Magisk ramdisk 原样保留，root 不丢）
+/data/adb/magisk/magiskboot repack /sdcard/boot_b-backup.img
+# 拉回电脑并临时启动测试
+adb pull /sdcard/new-boot.img
+fastboot boot new-boot.img
+# 确认正常后正式刷入 B 槽（A 槽保留当前可用镜像做备份）
+fastboot flash boot_b new-boot.img
 ```
 
 ### 4. 验证 Droidspaces
